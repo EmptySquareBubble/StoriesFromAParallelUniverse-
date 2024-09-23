@@ -5,28 +5,29 @@
 #include <iostream>
 #include <chrono>
 
-int next_gen(int next_gen_pray, int current_gen, bool depends_on_food)
+constexpr int portion_size = 2;
+
+void balance_population(const std::vector<int>& species_population, const int factor)
 {
-    //do some expensive magic to enforce parallelization
-    auto dummy_expensive_value = current_gen;
-    for(int i = 0; i < current_gen * 10; ++i)
-        dummy_expensive_value += std::sqrt(dummy_expensive_value);
-    
-    //how many predators may survive with given amount of pray
-    const auto portions = next_gen_pray / 4;
-    return depends_on_food ? std::max(current_gen, portions) : (current_gen);
-}
+    //simple serial version
+    auto next_gen_seq = std::accumulate(species_population.begin(), species_population.end(), 0, [factor](const auto first, const auto second){
+        return first + second * factor;});
+    //not processed in order! wrong result
+    auto next_gen_par = std::reduce(species_population.begin(), species_population.end(), 0, [factor](const auto first, const auto second){
+        return first + second * factor;});
+    //fix it it with transform reduce
+    auto next_gen_par_fixed = std::transform_reduce(species_population.begin(), species_population.end(), 0, std::plus{}, [factor](const auto item){
+        return item * factor;});
 
-void next_year_population(bool depends_on_food)
-{
-    std::vector<int> food_chain{40, 4, 25, 5, 128, 23, 1029, 43567, 23, 56, 134};
+    //little bit more sophisticated calculation of next gen
+    auto food_included = std::transform_reduce(std::execution::par, species_population.begin()+1, species_population.end(), species_population.begin(), species_population[0] * factor, std::plus{}, [factor](const auto& hunter, const auto& pray){
+        const auto portions_available = pray / portion_size; 
+        return std::clamp(portions_available, hunter, hunter * factor);});
 
-    auto next_gen_seq = std::accumulate(food_chain.begin() + 1, food_chain.end(), food_chain[0], [depends_on_food](const auto first, const auto second){
-        return first + next_gen(first, second, depends_on_food);});
-    auto next_gen_par = std::reduce(std::execution::par, food_chain.begin() + 1, food_chain.end(), food_chain[0], [depends_on_food](const auto first, const auto second){
-        return first + next_gen(first, second, depends_on_food);});
-
-    std::cout << "Total population size - " << (depends_on_food ? "depends on food available" : "no dependency") << " seq: " << next_gen_seq << " par: " << next_gen_par << std::endl;
+    //check the results
+    std::cout << "Population multiplied by factor " << factor << ":\n";
+    std::cout << " seq: " << next_gen_seq << " reduce: " << next_gen_par << " transform_reduce: " << next_gen_par_fixed << std::endl;
+    std::cout << "available food influences growth: " << food_included << std::endl;
 }
 
 const auto list_of_species = std::ranges::iota_view{0, 1700};
@@ -54,16 +55,11 @@ void build_underwater_kingdom()
 
 int main()
 {
-    //const auto start = std::chrono::steady_clock::now();
-
     //build_sky_empire();
     //build_underwater_kingdom();
 
-    next_year_population(true);
-    next_year_population(false);
-
-    //const auto end = std::chrono::steady_clock::now();
-    //std::cout << "execution time: " << end - start << std::endl;
+    std::vector<int> species_chain{68, 15, 4, 45, 18, 3};
+    balance_population(species_chain, 2);
 
     return 0;
 }
