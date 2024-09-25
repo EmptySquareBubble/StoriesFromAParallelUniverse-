@@ -9,13 +9,23 @@
 constexpr int portion_size = 1;
 constexpr int apetit_multiplier = 1;
 
+void dummy_expensive_computation(int seed)
+{
+    double out = seed;
+    for(int i = 0; i < seed * 1000; ++i)
+        out += std::sqrt(i * std::rand());
+}
+
 void portions_per_species(const std::vector<int>& species_population)
 {
+    int weight_multiplier = 2;
     //exclusive scan from partial_sum
     //serial solution
-    std::vector<int> portions_sum = {0};
-    std::partial_sum(species_population.begin(), species_population.end(), std::back_inserter(portions_sum), [&portions_sum](const auto& prays_portions, const auto& prays_count){
-        return portions_sum[portions_sum.size()-1]/apetit_multiplier + prays_count/portion_size;
+    std::vector<int> portions_sum(species_population.size());
+    std::partial_sum(species_population.begin(), species_population.end(), portions_sum.begin(), [&weight_multiplier](const auto& prays_portions, const auto& prays_count){
+        const auto out = prays_portions + prays_count * weight_multiplier;
+        weight_multiplier *= 2;
+        return out;
         });
     
     std::cout << "portions avalilable for each species (partial_sum): ";
@@ -24,14 +34,44 @@ void portions_per_species(const std::vector<int>& species_population)
     std::cout << "\n";
 
     //parallelizable solution
-    std::vector<int> portions_scanned;
-    std::exclusive_scan(species_population.begin(), species_population.end(), std::back_inserter(portions_scanned), 0, [](const auto& prays_portions, const auto& prays_count){
-        return prays_portions/apetit_multiplier + prays_count/portion_size;});
+    weight_multiplier = 2;
+    std::vector<int> portions_scanned(species_population.size());
+    std::inclusive_scan(std::execution::par, species_population.begin(), species_population.end(), portions_scanned.begin(), [&weight_multiplier](const auto& prays_portions, const auto& prays_count){
+        dummy_expensive_computation(prays_count);
+        const auto out = prays_portions + prays_count * weight_multiplier;
+        weight_multiplier *= 2;
+        return out;
+        });
     
-    std::cout << "portions avalilable for each species (exclusive_scan): ";
+    std::cout << "portions avalilable for each species (inclusive_scan): ";
     for(const auto& portion : portions_scanned)
         std::cout << portion << ",";
     std::cout << "\n";
+
+    //fixed parallelizable solution
+    std::vector<int> weights(species_population.size());
+    int n = 1;
+    std::generate(weights.begin(), weights.end(), [&n]() { auto oldN = n; n *= 2; return oldN;});
+    std::vector<int> weighted_population(species_population.size());
+    std::transform(species_population.begin(), species_population.end(), weights.begin(), weighted_population.begin(), [](const auto& a, const auto& b){ return a * b;} );
+    std::cout << "transformed: \n";
+    for(const auto portion : weighted_population)
+        std::cout << portion << ", ";
+    std::cout << "\n";
+
+    std::cout << "inclusive scan: \n";
+    std::vector<int> portions_trans_scanned(species_population.size());
+    std::inclusive_scan(std::execution::par, weighted_population.begin(), weighted_population.end(), portions_trans_scanned.begin(), [&](const auto& prays_portions, const auto& prays_count){
+        dummy_expensive_computation(prays_count);
+        return prays_portions + prays_count;
+        });
+    
+    std::cout << "portions avalilable for each species (inclusive_scan after transform): ";
+    for(const auto& portion : portions_trans_scanned)
+        std::cout << portion << ",";
+    std::cout << "\n";
+
+    //pipe it togehter
 }
 
 int next_generation_size(const std::vector<int>& species_population, const int factor)
