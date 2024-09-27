@@ -2,7 +2,7 @@
 # so let's require it now.
 cmake_minimum_required(VERSION 3.11-3.18)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 project(Stories_from_a_parallel_universe
