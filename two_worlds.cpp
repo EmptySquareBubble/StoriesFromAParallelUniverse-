@@ -76,6 +76,15 @@ void edible_mass_per_species(const std::vector<int>& species_population, const s
     std::cout << "\n";
 }
 
+void total_mass(const std::vector<int>& species_population, const std::vector<int>& species_weight)
+{
+    const auto total_weight = std::inner_product(species_population.begin(), species_population.end(), species_weight.begin(), 0);
+    std::cout << "there is " << total_weight << "kg of creatures alive\n";
+
+    const auto total_weight_par = std::transform_reduce(species_population.begin(), species_population.end(), species_weight.begin(), 0, std::plus{}, std::multiplies{});
+    std::cout << "there is " << total_weight_par << "kg of creatures alive\n";
+}
+
 int next_generation_size(const std::vector<int>& species_population, const int factor)
 {
     //simple serial version
@@ -141,6 +150,9 @@ int main()
     //make up list of weights for each kind. increasing row as probably larger are predators and smller prays
     //extra 1 at the end to make this example run even when i leave there nasty behaviour in first paralelizaion attempt
     const std::vector<int> species_weight{1, 2, 3, 4, 5, 6, 7, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+    total_mass(species_chain, species_weight);
+
     //find out food options per species
     edible_mass_per_species(species_chain, species_weight);
 
