@@ -2,8 +2,33 @@
 #include <thread>
 #include <execution>
 #include <print>
+#include <ranges>
 
 #include "naive_parallelism.h"
+
+void edible_mass_avoid_sync(const std::vector<int>& species_population, const std::vector<int>& species_weight, int growth_factor)
+{
+    std::vector<int> portions_scanned(species_population.size());
+
+    std::vector<int> grown_population(species_population.size());
+    std::vector<int> grown_population_weight(species_population.size());
+    std::transform(species_population.begin(), species_population.end(), grown_population.begin(), [&](const auto item){return item * growth_factor;});
+    std::transform(grown_population.begin(), grown_population.end(), species_weight.begin(), grown_population_weight.begin(), std::multiplies{});
+    std::exclusive_scan(std::execution::par_unseq, grown_population_weight.begin(), grown_population_weight.end(), portions_scanned.begin(), 0);
+
+    std::print("\nFood amount  avalilable for each species piping\n synced between each step: ");
+    for(const auto& portion : portions_scanned)
+        std::print("{}g, ", portion);
+    
+    //pipe it nicely together - evaluation of zip_transform is on demand. no computation will be executed before item is really used
+    auto weighs = std::views::zip_transform(std::multiplies{}, species_population, species_weight) | std::views::transform([&](const auto item){return item * growth_factor;});
+    std::exclusive_scan(std::execution::par_unseq, weighs.begin(), weighs.end(), portions_scanned.begin(), 0);
+    
+    std::print("\n piped into exclusive_scan: ");
+    for(const auto& portion : portions_scanned)
+        std::print("{}g, ", portion);
+    std::print("\n");
+}
 
 void edible_mass_no_canibalism(const std::vector<int>& species_mass, const int growth_factor)
 {
@@ -11,18 +36,20 @@ void edible_mass_no_canibalism(const std::vector<int>& species_mass, const int g
     std::vector<int> weight_per_species;
     std::vector<int> edible_mass(species_mass.size());
     std::ranges::transform(species_mass, std::back_inserter(weight_per_species), [&](const auto item){return item * growth_factor;});
+    
     std::inclusive_scan(std::execution::par_unseq, weight_per_species.begin(), weight_per_species.end(), edible_mass.begin());
 
     std::print("\nFood amount avalilable for each species fixed:\n canibalism allowed (inclusive_sum): ");
     for(const auto& portion : edible_mass)
-        std::print("{}, ", portion);
+        std::print("{}g, ", portion);
 
     //exclusive scan takes additional parameter (initial value) which will be assigned to very first element
     std::exclusive_scan(std::execution::par_unseq, weight_per_species.begin(), weight_per_species.end(), edible_mass.begin(), 0);
 
     std::print("\n canibalism not allowed (exclusive_sum): ");
     for(const auto& portion : edible_mass)
-        std::print("{}, ", portion);
+        std::print("{}g, ", portion);
+    std::print("\n");
 }
 
 //count how much food is there available for each kind
@@ -39,9 +66,9 @@ void edible_mass_per_species(const std::vector<int>& species_mass, const int gro
 		return equal_pray * growth_factor + smaller_pray;
     });
     
-    std::print("\nFood amount avalilable for each species:\n partial_sum: ");
+    std::print("\nFood weight avalilable for each species next season:\n partial_sum: ");
     for(const auto& portion : edible_mass)
-        std::print("{}, ", portion);
+        std::print("{}g, ", portion);
     
     //parallelizable solution
     std::inclusive_scan(std::execution::par, species_mass.begin(), species_mass.end(), edible_mass.begin(),
@@ -51,7 +78,7 @@ void edible_mass_per_species(const std::vector<int>& species_mass, const int gro
 
     std::print("\n inclusive_scan: ");
     for(const auto& portion : edible_mass)
-        std::print("{}, ", portion);
+        std::print("{}g, ", portion);
 
     //naive parallelizable solution
     naive_inclusive_scan(species_mass, edible_mass,
@@ -59,24 +86,10 @@ void edible_mass_per_species(const std::vector<int>& species_mass, const int gro
 		return equal_pray * growth_factor + smaller_pray;
     });
 
-    std::print("\n naive inclusive_scan: ");
+    std::print("g\n naive inclusive_scan: ");
     for(const auto& portion : edible_mass)
         std::print("{}, ", portion);
-    std::print("\n");
-
-    /*
-    //pipe it nicely together
-    auto weighs = std::views::zip_transform(std::multiplies{}, species_population, species_weight);
-    std::inclusive_scan(std::execution::par, weighs.begin(), weighs.end(), portions_scanned.begin(), [](const auto& prays_portions, const auto& prays_count){
-        dummy_expensive_computation(prays_count);
-        return prays_count + prays_portions;
-        });
-    
-    std::cout << "food amount  avalilable for each species (transform piped insice inclusive_scan): ";
-    for(const auto& portion : portions_scanned)
-        std::cout << portion << ",";
-    std::cout << "\n";
-    */
+    std::print("g\n");
 }
 
 void total_mass(const std::vector<int>& species_population, const std::vector<float>& species_weight)
@@ -105,8 +118,8 @@ void next_generation_size(const std::vector<int>& species_population, const int 
     auto next_gen_par_naive_fixed = naive_transform_reduce(species_population.begin(), species_population.end(), 0, [factor](const auto item){
         return item * factor;}, std::plus{});
     
-    std::print("\nPopulation multiplied by factor {}:\n", factor);
-    std::print(" seq: {}\n reduce: {}\n naive reduce: {}\n transform_reduce: {}\n naive transform_reduce {}\n", next_gen_seq, next_gen_par, next_gen_par_naive, next_gen_par_fixed, next_gen_par_naive_fixed);
+    std::print("\nPopulation size multiplied by factor {}:\n", factor);
+    std::print(" seq: {} residents\n reduce: {} residents\n naive reduce: {} residents\n transform_reduce: {} residents\n naive transform_reduce {} residents\n", next_gen_seq, next_gen_par, next_gen_par_naive, next_gen_par_fixed, next_gen_par_naive_fixed);
 }
 
 const auto list_of_species = std::ranges::iota_view{0, 1700};
@@ -146,17 +159,17 @@ int main()
     next_generation_size(species_chain, factor);
 
     //make up list of weights for each kind. increasing row as probably larger are predators and smaller prays
-    const std::vector<float> species_weight{0.0013f, 2.12f, 3.f, 43.3f, 512.2f, 6000.f, 7777777.7f, 150000000.23f};
+    const std::vector<float> species_weight{0.1e-13f, 2.12f, 3.f, 43.3f, 512.2f, 6000.f, 7777777.7f, 150000000.23f};
     total_mass(species_chain, species_weight);
 
     //find out food options per species
-    std::vector<int> species_mass(species_chain.size());
-    std::vector<int> species_weight_simple;
-    std::ranges::transform(std::ranges::iota_view{1, 9}, species_chain, std::back_inserter(species_weight_simple), std::multiplies{});
-    std::partial_sum(species_weight_simple.begin(), species_weight_simple.end(), species_mass.begin());
+    std::vector<int> species_mass;
+    std::ranges::transform(std::ranges::iota_view{1, 9}, species_chain, std::back_inserter(species_mass), std::multiplies{});
     edible_mass_per_species(species_mass, factor);
 
     edible_mass_no_canibalism(species_mass, factor);
     
+    edible_mass_avoid_sync(species_chain, std::ranges::iota_view{1, 9} | std::ranges::to<std::vector>(), factor);
+
     return 0;
 }
