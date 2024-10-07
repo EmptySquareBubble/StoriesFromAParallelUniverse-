@@ -121,12 +121,11 @@ int main()
     //our world has nice natural chain - here is listed size of population of each of the species ordered from the smallest/weakest prays to the biggest predators
     std::vector<int> species_chain{68, 15, 4, 45, 18, 3, 2, 11};
 
-    //how will the total population size change in the next generation if we will expect growt by given factor
+    //how will the total population size change in the next generation if we will expect growth by given factor
     constexpr int factor = 2;
     next_generation_size(species_chain, factor);
 
-    //make up list of weights for each kind. increasing row as probably larger are predators and smller prays
-    //extra 1 at the end to make this example run even when i leave there nasty behaviour in first paralelizaion attempt
+    //make up list of weights for each kind. increasing row as probably larger are predators and smaller prays
     const std::vector<float> species_weight{0.0013f, 2.12f, 3.f, 43.3f, 512.2f, 6000.f, 7777777.7f, 150000000.23f};
     total_mass(species_chain, species_weight);
 
