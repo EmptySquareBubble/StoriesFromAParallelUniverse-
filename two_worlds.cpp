@@ -5,6 +5,26 @@
 
 #include "naive_parallelism.h"
 
+void edible_mass_no_canibalism(const std::vector<int>& species_mass, const int growth_factor)
+{
+    //transform before reduction to avoid associativity problem
+    std::vector<int> weight_per_species;
+    std::vector<int> edible_mass(species_mass.size());
+    std::ranges::transform(species_mass, std::back_inserter(weight_per_species), [&](const auto item){return item * growth_factor;});
+    std::inclusive_scan(std::execution::par_unseq, weight_per_species.begin(), weight_per_species.end(), edible_mass.begin());
+
+    std::print("\nFood amount avalilable for each species fixed:\n canibalism allowed (inclusive_sum): ");
+    for(const auto& portion : edible_mass)
+        std::print("{}, ", portion);
+
+    //exclusive scan takes additional parameter (initial value) which will be assigned to very first element
+    std::exclusive_scan(std::execution::par_unseq, weight_per_species.begin(), weight_per_species.end(), edible_mass.begin(), 0);
+
+    std::print("\n canibalism not allowed (exclusive_sum): ");
+    for(const auto& portion : edible_mass)
+        std::print("{}, ", portion);
+}
+
 //count how much food is there available for each kind
 //everyone can eat their kind and smaller
 void edible_mass_per_species(const std::vector<int>& species_mass, const int growth_factor)
@@ -135,6 +155,8 @@ int main()
     std::ranges::transform(std::ranges::iota_view{1, 9}, species_chain, std::back_inserter(species_weight_simple), std::multiplies{});
     std::partial_sum(species_weight_simple.begin(), species_weight_simple.end(), species_mass.begin());
     edible_mass_per_species(species_mass, factor);
+
+    edible_mass_no_canibalism(species_mass, factor);
     
     return 0;
 }
