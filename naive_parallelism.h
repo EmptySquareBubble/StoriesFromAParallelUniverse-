@@ -44,7 +44,7 @@ void naive_inclusive_scan(I input, I& output, T transform)
             output[i] = input[i];
         for(size_t i = idx; i < output.size(); ++i)
             output[i] = transform(input[i - idx], input[i]);
-        idx = 1 << idx;
+        idx = 1ull << idx;
         
         std::swap(input, output);
     }

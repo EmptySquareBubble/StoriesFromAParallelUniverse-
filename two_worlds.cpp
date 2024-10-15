@@ -95,7 +95,7 @@ void edible_mass_per_species(const std::vector<int>& species_mass, const int gro
 void total_mass(const std::vector<int>& species_population, const std::vector<float>& species_weight)
 {
     std::vector<float> float_population;
-    std::transform(species_population.begin(), species_population.end(), std::back_inserter(float_population), [](int x) { return static_cast<double>(x);});
+    std::transform(species_population.begin(), species_population.end(), std::back_inserter(float_population), [](int x) { return static_cast<float>(x);});
 
     std::print("\nWhat is total weight of whole population: \n");
     std::print(" inner_product: {}g\n", std::inner_product(float_population.begin(), float_population.end(), species_weight.begin(), 0.f));
