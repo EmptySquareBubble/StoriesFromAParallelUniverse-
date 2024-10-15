@@ -94,10 +94,13 @@ void edible_mass_per_species(const std::vector<int>& species_mass, const int gro
 
 void total_mass(const std::vector<int>& species_population, const std::vector<float>& species_weight)
 {
+    std::vector<float> float_population;
+    std::transform(species_population.begin(), species_population.end(), std::back_inserter(float_population), [](int x) { return static_cast<double>(x);});
+
     std::print("\nWhat is total weight of whole population: \n");
-    std::print(" inner_product: {}g\n", std::inner_product(species_population.begin(), species_population.end(), species_weight.begin(), 0.f));
-    std::print(" transform_reduce: {}g\n", std::transform_reduce(std::execution::par_unseq, species_population.begin(), species_population.end(), species_weight.begin(), 0.f));
-    std::print(" naive parallelization: {}g\n", naive_transform_reduce(species_population.begin(), species_population.end(), species_weight.begin(), 0.f, std::multiplies{}, std::plus{}));
+    std::print(" inner_product: {}g\n", std::inner_product(float_population.begin(), float_population.end(), species_weight.begin(), 0.f));
+    std::print(" transform_reduce: {}g\n", std::transform_reduce(std::execution::par_unseq, float_population.begin(), float_population.end(), species_weight.begin(), 0.f));
+    std::print(" naive parallelization: {}g\n", naive_transform_reduce(float_population.begin(), float_population.end(), species_weight.begin(), 0.f, std::multiplies{}, std::plus{}));
 }
 
 void next_generation_size(const std::vector<int>& species_population, const int factor)
@@ -159,9 +162,9 @@ int main()
     next_generation_size(species_chain, factor);
 
     //make up list of weights for each kind. increasing row as probably larger are predators and smaller prays
-    const std::vector<float> species_weight{0.1e-13f, 2.12f, 3.f, 43.3f, 512.2f, 6000.f, 7777777.7f, 150000000.23f};
+    const std::vector<float> species_weight{1e-6f, 2.1e-5f, 3.f, 43.3f, 5.1e3f, 6.5e4f, 7.7e6f, 1.5e8f};
     total_mass(species_chain, species_weight);
-
+    
     //find out food options per species
     std::vector<int> species_mass;
     std::ranges::transform(std::ranges::iota_view{1, 9}, species_chain, std::back_inserter(species_mass), std::multiplies{});
