@@ -174,5 +174,49 @@ int main()
     
     edible_mass_avoid_sync(species_chain, std::ranges::iota_view{1, 9} | std::ranges::to<std::vector>(), factor);
 
+    /*todo: 
+    for_each a for_each_n je taky novy
+    transform_exclusive_scan + transform_inclusive_scan taky existuje
+    */
+
+    ///comparison of different execution policies
+    //pristupuji stejny output value seq ok, par zamknout, unseq ani ocko nenasadis
+    //rybicky plavou [pozice, rychlost]
+    //priplave zralok
+    //vsichni utecou do nejblizsiho ukrytu [pozice, pocet mist]
+    std::vector<std::pair<int, int>> fishes{{23, 10}, {54, 15}, {55, 5}, {123, 20}, {124, 18}, {124, 18}, {320, 2}, {323, 5}, {480, 16}};
+    std::vector<std::pair<int, int>> hideouts{{30, 1}, {54, 1}, {100, 1}, {123, 1}, {145, 1}, {230, 1}, {256, 1}, {278, 1}, {345, 1}, {372, 1}, {423, 1}, {478, 1}, {579, 1}, {590, 1}, {644, 1}, {700, 1}};
+    auto time_interval = 1;
+    std::atomic<bool> shark = true;
+
+    //ok for par once shark is atomic or locked
+    //jak si tu udelat nakej peknej deadlock?
+    //zapomenout zamknout sdilene
+    std::for_each(std::execution::seq, fishes.begin(), fishes.end(), [&](auto& fish)
+    {
+        if(shark)
+        {
+            auto second = std::find_if(hideouts.begin(), hideouts.end(), [&](const auto hideout) { 
+                if(hideout.first >= fish.first)
+                    return true;
+                return false;
+            });
+            if(second == hideouts.end())
+                std::print("{} goes for{}\n", fish.first, (second - 1)->first);
+            if(second == hideouts.begin())
+                std::print("{} goes for{}\n", fish.first, second->first);
+            else
+                std::print("{} goes for: {}\n", fish.first, (fish.first - (second - 1)->first) < ((second)->first - fish.first) ? (second - 1)->first : second->first);               
+        }
+        else
+            fish.first = fish.first + time_interval * fish.second;        
+    });
+
+    std::print("fishes final positions: \n");
+    for(auto fish : fishes)
+    {
+        std::print("{}, ", fish.first);
+    }
+
     return 0;
 }
