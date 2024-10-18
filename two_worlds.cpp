@@ -179,34 +179,67 @@ int main()
     transform_exclusive_scan + transform_inclusive_scan taky existuje
     */
 
+    struct Hideout{
+        public:
+            int pos;
+            Hideout(int p, int c):pos(p), capacity(c){}
+            std::atomic_ref<const int> c_cnt() const {return std::atomic_ref<const int>(capacity);}
+            std::atomic_ref<int> cnt() {return std::atomic_ref<int>(capacity);}
+        private:
+            int capacity;
+    };
     ///comparison of different execution policies
     //pristupuji stejny output value seq ok, par zamknout, unseq ani ocko nenasadis
     //rybicky plavou [pozice, rychlost]
     //priplave zralok
     //vsichni utecou do nejblizsiho ukrytu [pozice, pocet mist]
-    std::vector<std::pair<int, int>> fishes{{23, 10}, {54, 15}, {55, 5}, {123, 20}, {124, 18}, {124, 18}, {320, 2}, {323, 5}, {480, 16}};
-    std::vector<std::pair<int, int>> hideouts{{30, 1}, {54, 1}, {100, 1}, {123, 1}, {145, 1}, {230, 1}, {256, 1}, {278, 1}, {345, 1}, {372, 1}, {423, 1}, {478, 1}, {579, 1}, {590, 1}, {644, 1}, {700, 1}};
+    std::vector<std::pair<int, int>> fishes{{32, 10}, {54, 15}, {55, 5}, {123, 20}, {124, 18}, {124, 18}, {320, 2}, {323, 5}, {480, 16}};
+    std::vector<Hideout> hideouts{{30, 1}, {54, 1}, {123, 1}, {145, 1}, {230, 1}, {256, 1}, {278, 1}, {345, 1}, {372, 1}, {423, 1}, {478, 1}, {579, 1}, {590, 1}, {644, 1}, {700, 1}};
     auto time_interval = 1;
     std::atomic<bool> shark = true;
-
+    
     //ok for par once shark is atomic or locked
-    //jak si tu udelat nakej peknej deadlock?
-    //zapomenout zamknout sdilene
-    std::for_each(std::execution::seq, fishes.begin(), fishes.end(), [&](auto& fish)
+    std::for_each(std::execution::par, fishes.begin(), fishes.end(), [&](auto& fish)
     {
         if(shark)
         {
-            auto second = std::find_if(hideouts.begin(), hideouts.end(), [&](const auto hideout) { 
-                if(hideout.first >= fish.first)
+            auto free_hideouts = std::ranges::filter_view(hideouts, [](const auto& hideout){
+                if (hideout.c_cnt() > 0) 
+                    return true; 
+                return false;});
+
+            //find closest hideout a go there
+            auto first = free_hideouts.begin();
+            auto second = std::find_if(++free_hideouts.begin(), free_hideouts.end(), [&](const auto& hideout) { 
+                if(hideout.pos >= fish.first)
                     return true;
+                
+                ++first;
                 return false;
             });
-            if(second == hideouts.end())
-                std::print("{} goes for{}\n", fish.first, (second - 1)->first);
-            if(second == hideouts.begin())
-                std::print("{} goes for{}\n", fish.first, second->first);
+            const auto txt_begin = std::format("{} goes for: [{}, {}] -> ", fish.first, first->pos, (second == free_hideouts.end()) ? 0 : second->pos);
+
+            auto& selected_hideout = first;
+            if(second == free_hideouts.end())
+                selected_hideout = free_hideouts.begin();   //not correct not important here
             else
-                std::print("{} goes for: {}\n", fish.first, (fish.first - (second - 1)->first) < ((second)->first - fish.first) ? (second - 1)->first : second->first);               
+            {
+                selected_hideout = (fish.first - first->pos) < (second->pos - fish.first) ? first : second;   
+            }
+               
+            //selected_hideout->Cnt() -= 1;     //possible only in seq
+                                                //for par it has to be locked
+                                                //for par_unseq and unseq there is no way
+            int prev_capacity = selected_hideout->cnt();
+            while(prev_capacity > 0 && !selected_hideout->cnt().compare_exchange_weak(prev_capacity, prev_capacity - 1));
+
+            if(prev_capacity > 0)
+            {
+                fish.first = selected_hideout->pos;
+                std::print("{}{}\n", txt_begin, fish.first);
+            }
+            else
+                std::print("{}no hideout\n", txt_begin);     
         }
         else
             fish.first = fish.first + time_interval * fish.second;        
@@ -216,6 +249,12 @@ int main()
     for(auto fish : fishes)
     {
         std::print("{}, ", fish.first);
+    }
+
+    std::print("hideouts final state: \n");
+    for(auto& hideout : hideouts)
+    {
+        std::print("[{}, {}]", hideout.pos, hideout.c_cnt().load());
     }
 
     return 0;
