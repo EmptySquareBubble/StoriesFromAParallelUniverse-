@@ -153,8 +153,28 @@ void fish_and_shark()
     struct Hideout
     {
         int pos;
-        std::atomic<int> slots;
+        //int slots;    //may be used only for std::execution::seq
         Hideout(int p, int c):pos(p), slots(c){}
+
+        //all the rest is workaround to be able to use it with std::execution::par - not posible to use with unseq as there is synchronization included
+        int slots_cnt()
+        {
+            std::lock_guard lock(slot_mutex);
+            return slots;
+        }
+        bool take_slot()
+        {
+            std::lock_guard lock(slot_mutex);
+            if(slots > 0)
+            {
+                --slots;
+                return true;
+            }
+            return false;
+        }
+    private:
+        int slots;
+        std::mutex slot_mutex;        
     };
 
     struct Fish
@@ -178,47 +198,34 @@ void fish_and_shark()
         }
         else
         {
-            auto free_hideouts = std::ranges::filter_view(hideouts, [](const auto& hideout){
-                if (hideout.slots > 0) 
+            auto free_hideouts = std::ranges::filter_view(hideouts, [](auto& hideout){
+                if (hideout.slots_cnt() > 0) 
                     return true; 
                 return false;});
             
-            //find closest hideout a go there
-            auto first = free_hideouts.begin();
-            if(first == free_hideouts.end())
+            auto nearest_hideouts = std::adjacent_find(free_hideouts.begin(), free_hideouts.end(), [&](const auto& first, const auto& second) { 
+                if(first.pos <= fish.pos && second.pos >= fish.pos)
+                    return true;
+                return false;
+            });
+
+            if(nearest_hideouts == free_hideouts.end())
             {
                 std::print("{} don't have any free hidout\n", fish.pos);
                 return;
             }
+            const auto first = nearest_hideouts;
+            const auto second = ++nearest_hideouts;
 
-            auto second = std::find_if(++free_hideouts.begin(), free_hideouts.end(), [&](const auto& hideout) { 
-                if(hideout.pos >= fish.pos)
-                    return true;
-                
-                ++first;
-                return false;
-            });
             const auto txt_begin = std::format("{} goes for: [{}, {}] -> ", fish.pos, first->pos, (second == free_hideouts.end()) ? 0 : second->pos);
             
-            auto& selected_hideout = first;
-            if(second == free_hideouts.end())
-                selected_hideout = free_hideouts.begin();   //not correct not important here
-            else
-            {
-                selected_hideout = fish.pos < std::midpoint(first->pos, second->pos) ? first : second;   
-            }
-
+            auto& selected_hideout = fish.pos < std::midpoint(first->pos, second->pos) ? first : second;   
+            
             //looong swim to hideout (to be able to see effect of spot stealing)
             const auto distance = std::abs(selected_hideout->pos - fish.pos);
             std::this_thread::sleep_for(std::chrono::milliseconds{distance * fish.velocity});
 
-            //selected_hideout->slots -= 1;     //possible only in seq
-                                                //for par it has to be synced
-                                                //for par_unseq and unseq there is no way - atomic aren't allowed!
-            int prev_capacity = selected_hideout->slots;
-            while(prev_capacity > 0 && !selected_hideout->slots.compare_exchange_weak(prev_capacity, prev_capacity - 1));
-
-            if(prev_capacity > 0)
+            if(selected_hideout->take_slot())
             {
                 fish.pos = selected_hideout->pos;
                 std::print("{}{}\n", txt_begin, fish.pos);
@@ -237,13 +244,18 @@ void fish_and_shark()
     std::print("\nhideouts final state: \n");
     for(auto& hideout : hideouts)
     {
-        std::print("[{}, {}]", hideout.pos, hideout.slots.load());
+        std::print("[{}, {}]", hideout.pos, hideout.slots_cnt());
     }
 }
 
 int main()
 {
-    //two different world made using two different approach - which one is better and why
+    /*
+    two different world made using two different approach
+    if you create large number of species you can observe different behavior
+    manual threads will drain your cpu while paralel alg version will stay sustainable thanks to thread management hidden behind
+    commented out to make initial run of this example smooth - feel free to uncomment, but expect intensive load for your CPU
+    */
     //build_sky_empire();
     //build_underwater_kingdom();
 
@@ -265,8 +277,10 @@ int main()
 
     edible_mass_no_canibalism(species_mass, factor);
     
+    //put multiple operations into one smooth chain without any sync between each step
     edible_mass_avoid_sync(species_chain, std::ranges::iota_view{1, 9} | std::ranges::to<std::vector>(), factor);
 
+    //demonstrate different execution policies in one example 
     fish_and_shark();
     /*todo: 
     for_each a for_each_n je taky novy
