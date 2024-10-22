@@ -27,7 +27,14 @@ void edible_mass_avoid_sync(const std::vector<int>& species_population, const st
     std::print("\n piped into exclusive_scan: ");
     for(const auto& portion : portions_scanned)
         std::print("{}g, ", portion);
+    
+    const auto current_weights = std::views::zip_transform(std::multiplies{}, species_population, species_weight);
+    std::transform_exclusive_scan(std::execution::par_unseq, current_weights.begin(), current_weights.end(), portions_scanned.begin(), 0, std::plus{}, [&](const auto& w){return w * growth_factor;});
+    std::print("\n piped with transform_exclusive_scan: ");
+    for(const auto& portion : portions_scanned)
+        std::print("{}g, ", portion);
     std::print("\n\n");
+
 }
 
 void edible_mass_no_canibalism(const std::vector<int>& species_mass, const int growth_factor)
