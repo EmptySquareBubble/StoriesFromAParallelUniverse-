@@ -255,6 +255,53 @@ void fish_and_shark()
     }
 }
 
+/*
+This example has 2 variants - with lock and with atomics
+to switch uncomment commented out lines and comment those with '//' at the end
+
+Niether can be used with unseq / par_unseq policy
+with vector made up from items [A, B, C, D]
+
+lock may be interleaved to this sequence: A.lock(), C.lock(), D.lock(), B.lock()
+and locking locked mutex from the same thread is undefined behaviour
+
+atomics may be interleaved to this sequence: A.while(has_leader.exchange(true)), C.while(has_leader.exchange(true)) ... A.has_leader = false
+where A will gain the leadership and C will wait for it for ever because A will never reach the point where leadership is freed
+*/
+void keep_one_leader()
+{
+    //bool has_leader = false;
+    //std::mutex leaders_mutex;
+    std::atomic<bool> has_leader = false;   //
+    std::array<int, 8> fishes;
+    std::ranges::iota(fishes, 0);
+    
+    std::print("\n\nObserve fish leader - only one fish may lead them all\n");
+    std::for_each(std::execution::par, fishes.begin(), fishes.end(), [&](auto& fish)
+    {
+        //std::unique_lock lock(leaders_mutex);
+        //while(has_leader)
+        //{
+        //    lock.unlock();
+        //    std::this_thread::sleep_for(std::chrono::milliseconds{200});
+        //    lock.lock();
+        //}
+        while(has_leader.exchange(true))    //
+            std::this_thread::sleep_for(std::chrono::milliseconds{200});    //
+
+        std::print(" fish {} became a leader\n", fish);
+        //has_leader = true;
+        //lock.unlock();
+
+        std::this_thread::sleep_for(std::chrono::seconds{1});
+        std::print(" leader died\n");
+        
+        //lock.lock();
+        has_leader = false;
+    });
+    std::print(" there is no more fish :(\n\n");
+}
+
 int main()
 {
     /*
@@ -301,10 +348,11 @@ int main()
     //then everyone looks for the closest hideout to stay safe 
     fish_and_shark();
 
-    /*todo: 
-    for_each a for_each_n je taky novy v 17
-    transform_exclusive_scan + transform_inclusive_scan taky existuje (transform_cokoli_noveho)
-    */
+    //show situation where it is possible to deadlock in unseq
+    //fishes often lives in larger groups where is only one leader
+    //once the leader dies someone else will became new leader of the group
+    //but there is always only one leader
+    keep_one_leader();
 
     return 0;
 }
