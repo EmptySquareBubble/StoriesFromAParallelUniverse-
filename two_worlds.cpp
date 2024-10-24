@@ -140,6 +140,7 @@ void build_sky_empire(const auto& list_of_species)
     std::for_each(list_of_species.begin(), list_of_species.end(), [&](const auto id){
         creatures.push_back(std::move(std::jthread([id]{
             std::print("my name is #{} and I'm flying!\n", id);
+            std::this_thread::sleep_for(std::chrono::seconds{1});
         })));
     });
 
@@ -150,6 +151,7 @@ void build_underwater_kingdom(const auto& list_of_species)
     //doesn't really make that much threads has clever management under the hood!
     std::for_each(std::execution::par, list_of_species.begin(), list_of_species.end(), [&](const auto id){
         std::print("my name is #{} and I'm swimming!\n", id);
+        std::this_thread::sleep_for(std::chrono::seconds{1});
     });
 }
 
@@ -310,13 +312,11 @@ int main()
     manual threads will drain your cpu while paralel alg version will stay sustainable thanks to thread management hidden behind
     commented out to make initial run of this example smooth - feel free to uncomment, but expect intensive load for your CPU
     */
-    /*
     std::print("Create sky and underwater worlds\n");
-    const auto list_of_species = std::ranges::iota_view{0, 1700};
-    build_sky_empire(list_of_species);
-    build_underwater_kingdom(list_of_species);
-    */
-
+    const auto list_of_species = std::ranges::iota_view{0, 1000000};
+    //build_sky_empire(list_of_species);    //don't even try it - you are not able to run so many threads
+    build_underwater_kingdom(list_of_species);  //you can try to uncomment this one. underlying thread management will handle that it just takes a while
+    
     //our world has nice natural chain - here is listed size of population of each of the species ordered from the smallest/weakest prays to the biggest predators
     std::vector<int> species_chain{68, 15, 4, 45, 18, 3, 2, 11};
     //how will the total population size change in the next generation if we will expect growth by given factor
