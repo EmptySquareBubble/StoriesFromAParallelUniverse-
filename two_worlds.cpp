@@ -96,7 +96,28 @@ void edible_mass_per_species(const std::vector<int>& species_mass, const int gro
     std::print("\n naive inclusive_scan: ");
     for(const auto& portion : edible_mass)
         std::print("{}g, ", portion);
+    
+    //fix by transform version? - nope
+    std::transform_inclusive_scan(std::execution::par, species_mass.begin(), species_mass.end(), edible_mass.begin(),
+	std::plus{}, [growth_factor](const auto& pray){
+		return pray * growth_factor;
+    });
+
+    std::print("\n transform_inclusive_scan: ");
+    for(const auto& portion : edible_mass)
+        std::print("{}g, ", portion);
+
+    //fix by transform_exclusive version!
+    std::transform_exclusive_scan(std::execution::par, species_mass.begin() + 1, species_mass.end(), edible_mass.begin(), species_mass[0],
+	std::plus{}, [growth_factor](const auto& pray){
+		return pray * growth_factor;
+    });
+
+    std::print("\n transform_exclusive_scan: ");
+    for(const auto& portion : edible_mass)
+        std::print("{}g, ", portion);
     std::print("\n");
+
 }
 
 void total_mass(const std::vector<int>& species_population, const std::vector<float>& species_weight)
@@ -315,7 +336,7 @@ int main()
     std::print("Create sky and underwater worlds\n");
     const auto list_of_species = std::ranges::iota_view{0, 1000000};
     //build_sky_empire(list_of_species);    //don't even try it - you are not able to run so many threads
-    build_underwater_kingdom(list_of_species);  //you can try to uncomment this one. underlying thread management will handle that it just takes a while
+    //build_underwater_kingdom(list_of_species);  //you can try to uncomment this one. underlying thread management will handle that it just takes a while
     
     //our world has nice natural chain - here is listed size of population of each of the species ordered from the smallest/weakest prays to the biggest predators
     std::vector<int> species_chain{68, 15, 4, 45, 18, 3, 2, 11};
